@@ -27,23 +27,23 @@ def load_dataset() -> pd.DataFrame:
 
 
 def split_dataset(data: pd.DataFrame):
-    """Split the dataset chronologically into training and test sets."""
+    """Split data chronologically into train, validation, and test sets."""
     dates = sorted(data["date"].unique())
 
-    split_index = int(len(dates) * 0.8)
+    train_split = int(len(dates) * 0.70)
+    validation_split = int(len(dates) * 0.85)
 
-    # Leave a five-trading-day gap so training labels cannot
-    # use price movement from the test period.
-    train_end_index = split_index - 5
+    gap = 5
 
-    train_end = dates[train_end_index]
-    test_start = dates[split_index]
+    train_dates = dates[: train_split - gap]
+    validation_dates = dates[train_split : validation_split - gap]
+    test_dates = dates[validation_split:]
 
-    train = data[data["date"] <= train_end]
-    test = data[data["date"] >= test_start]
+    train = data[data["date"].isin(train_dates)]
+    validation = data[data["date"].isin(validation_dates)]
+    test = data[data["date"].isin(test_dates)]
 
-    return train, test
-
+    return train, validation, test
 
 def train_model(
     x_train: pd.DataFrame,
@@ -95,27 +95,77 @@ def evaluate_model(
 
 if __name__ == "__main__":
     data = load_dataset()
-    train, test = split_dataset(data)
+
+    train, validation, test = split_dataset(data)
 
     x_train = train[FEATURE_COLUMNS]
     y_train = train["target"]
 
+    x_validation = validation[FEATURE_COLUMNS]
+    y_validation = validation["target"]
+
     x_test = test[FEATURE_COLUMNS]
     y_test = test["target"]
 
-    print(f"Training rows: {len(train)}")
-    print(f"Test rows:     {len(test)}")
-    print(f"Training through: {train['date'].max().date()}")
-    print(f"Testing from:     {test['date'].min().date()}")
-    print()
-    print(f"Train target rate: {y_train.mean():.3f}")
-    print(f"Test target rate:  {y_test.mean():.3f}")
-    print()
+    print(f"Training rows:   {len(train)}")
+    print(f"Validation rows: {len(validation)}")
+    print(f"Test rows:       {len(test)}")
 
+    print()
+    print(
+        f"Training:   "
+        f"{train['date'].min().date()} -> "
+        f"{train['date'].max().date()}"
+    )
+    print(
+        f"Validation: "
+        f"{validation['date'].min().date()} -> "
+        f"{validation['date'].max().date()}"
+    )
+    print(
+        f"Test:       "
+        f"{test['date'].min().date()} -> "
+        f"{test['date'].max().date()}"
+    )
+
+    print()
+    print(f"Train target rate:      {y_train.mean():.3f}")
+    print(f"Validation target rate: {y_validation.mean():.3f}")
+    print(f"Test target rate:       {y_test.mean():.3f}")
+
+    # First train only on the training period.
     model = train_model(x_train, y_train)
 
-    evaluate_model(model, x_test, y_test)
+    print("\nValidation metrics:")
+    evaluate_model(
+        model,
+        x_validation,
+        y_validation,
+    )
 
-    model.save_model(MODEL_PATH)
+    # Hyperparameters are now frozen. Retrain using all non-test data.
+    final_training_data = pd.concat(
+        [train, validation],
+        ignore_index=True,
+    )
+
+    x_final_train = final_training_data[FEATURE_COLUMNS]
+    y_final_train = final_training_data["target"]
+
+    print("\nTraining final model on train + validation...")
+    final_model = train_model(
+        x_final_train,
+        y_final_train,
+    )
+
+    print("\nFinal test metrics:")
+    evaluate_model(
+        final_model,
+        x_test,
+        y_test,
+    )
+
+    final_model.save_model(MODEL_PATH)
+
     print()
-    print(f"Saved model to {MODEL_PATH}")
+    print(f"Saved final model to {MODEL_PATH}")
