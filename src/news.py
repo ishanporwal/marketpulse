@@ -3,6 +3,7 @@
 import os
 import re
 
+import requests
 import yfinance as yf
 from dotenv import load_dotenv
 
@@ -84,9 +85,60 @@ def get_yahoo_news(ticker: str, limit: int = 10) -> list[dict]:
 
 def get_marketaux_news(ticker: str, limit: int = 3) -> list[dict]:
     """Fetch ticker-specific financial news from Marketaux."""
-    raise NotImplementedError(
-        "Marketaux support will be added before deployment."
+    api_key = os.getenv("MARKETAUX_API_KEY")
+
+    if not api_key:
+        raise ValueError("MARKETAUX_API_KEY is not set.")
+
+    response = requests.get(
+        "https://api.marketaux.com/v1/news/all",
+        params={
+            "api_token": api_key,
+            "symbols": ticker,
+            "filter_entities": "true",
+            "must_have_entities": "true",
+            "group_similar": "true",
+            "language": "en",
+            "sort": "entity_match_score",
+            "sort_order": "desc",
+            "limit": min(limit, 3),
+        },
+        timeout=10,
     )
+
+    response.raise_for_status()
+
+    data = response.json()
+
+    articles = []
+    seen_titles = set()
+
+    for item in data.get("data", []):
+        title = item.get("title")
+        link = item.get("url")
+
+        if not title:
+            continue
+
+        # Normalize title so duplicate headlines are removed even if
+        # Marketaux gives them different URLs.
+        dedupe_key = " ".join(title.lower().split())
+
+        if dedupe_key in seen_titles:
+            continue
+
+        seen_titles.add(dedupe_key)
+
+        articles.append(
+            {
+                "title": title,
+                "publisher": item.get("source", "Unknown"),
+                "link": link,
+                "published_at": item.get("published_at"),
+            }
+        )
+
+    return articles[:limit]
 
 
 def get_stock_news(ticker: str, limit: int = 5) -> list[dict]:
@@ -97,6 +149,7 @@ def get_stock_news(ticker: str, limit: int = 5) -> list[dict]:
         return get_marketaux_news(ticker, limit)
 
     return get_yahoo_news(ticker, limit)
+
 
 def get_analyzed_news(ticker: str, limit: int = 5) -> list[dict]:
     """Return recent news with FinBERT sentiment labels."""

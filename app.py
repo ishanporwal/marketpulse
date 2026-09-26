@@ -23,6 +23,12 @@ def get_cached_summary(
     )
 
 
+@st.cache_data(ttl=1800, show_spinner=False)
+def get_cached_news(ticker: str):
+    """Cache analyzed financial news for 30 minutes."""
+    return get_analyzed_news(ticker, limit=5)
+
+
 st.set_page_config(
     page_title="MarketPulse",
     layout="wide",
@@ -51,7 +57,7 @@ try:
     info = get_stock_info(ticker)
 
     risk_score, latest_features, contributions = predict_abnormal_move(ticker)
-    articles = get_analyzed_news(ticker, limit=5)
+    articles = get_cached_news(ticker)
 
     current_price = data["Close"].iloc[-1]
     previous_close = data["Close"].iloc[-2]
