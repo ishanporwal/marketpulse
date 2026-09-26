@@ -2,8 +2,25 @@ import streamlit as st
 import plotly.graph_objects as go
 
 from src.market_data import get_stock_history, get_stock_info
-from src.predictor import predict_abnormal_move
 from src.news import get_analyzed_news
+from src.predictor import predict_abnormal_move
+from src.summarizer import generate_market_summary
+
+
+@st.cache_data(ttl=1800, show_spinner=False)
+def get_cached_summary(
+    ticker,
+    risk_score,
+    contributions,
+    articles,
+):
+    """Cache generated market summaries for 30 minutes."""
+    return generate_market_summary(
+        ticker=ticker,
+        risk_score=risk_score,
+        contributions=contributions,
+        articles=articles,
+    )
 
 
 st.set_page_config(
@@ -13,10 +30,21 @@ st.set_page_config(
 
 st.title("MarketPulse")
 
-ticker = st.text_input(
-    "Ticker",
-    value="NVDA",
-).upper()
+if "ticker" not in st.session_state:
+    st.session_state.ticker = "NVDA"
+
+with st.form("ticker_form"):
+    ticker_input = st.text_input(
+        "Ticker",
+        value=st.session_state.ticker,
+    )
+
+    submitted = st.form_submit_button("Analyze")
+
+if submitted:
+    st.session_state.ticker = ticker_input.upper()
+
+ticker = st.session_state.ticker
 
 try:
     data = get_stock_history(ticker)
@@ -86,6 +114,17 @@ try:
     )
 
     st.plotly_chart(fig, width="stretch")
+
+    with st.spinner("Generating market summary..."):
+        summary = get_cached_summary(
+            ticker,
+            risk_score,
+            contributions,
+            articles,
+        )
+
+    st.subheader("AI Market Summary")
+    st.write(summary)
 
     st.subheader("Model Signals")
 
