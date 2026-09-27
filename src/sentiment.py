@@ -19,17 +19,37 @@ def get_sentiment_model():
 
 
 def analyze_sentiment(texts: list[str]) -> list[dict]:
-    """Classify financial text as positive, neutral, or negative."""
+    """Classify financial text using FinBERT."""
     if not texts:
         return []
 
     classifier = get_sentiment_model()
-    results = classifier(texts, truncation=True)
 
-    return [
-        {
-            "label": result["label"].lower(),
-            "confidence": float(result["score"]),
+    results = classifier(
+        texts,
+        truncation=True,
+        top_k=None,
+    )
+
+    analyzed = []
+
+    for result in results:
+        probabilities = {
+            item["label"].lower(): float(item["score"])
+            for item in result
         }
-        for result in results
-    ]
+
+        label = max(
+            probabilities,
+            key=probabilities.get,
+        )
+
+        analyzed.append(
+            {
+                "label": label,
+                "confidence": probabilities[label],
+                "probabilities": probabilities,
+            }
+        )
+
+    return analyzed

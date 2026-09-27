@@ -122,8 +122,9 @@ def sentiment_badge(sentiment: str) -> str:
         "positive": ("#166534", "#dcfce7"),
         "negative": ("#991b1b", "#fee2e2"),
         "neutral": ("#475569", "#f1f5f9"),
+        "mixed": ("#92400e", "#fef3c7"),
     }
-
+    
     foreground, background = styles.get(
         sentiment,
         ("#475569", "#f1f5f9"),
@@ -340,11 +341,21 @@ try:
                     for article in articles
                 )
 
+                sentiment_parts = [
+                    f"{counts.get('positive', 0)} positive",
+                    f"{counts.get('neutral', 0)} neutral",
+                    f"{counts.get('negative', 0)} negative",
+                ]
+
+                if counts.get("mixed", 0):
+                    sentiment_parts.append(
+                        f"{counts['mixed']} mixed"
+                    )
+
                 st.caption(
-                    f"{counts.get('positive', 0)} positive · "
-                    f"{counts.get('neutral', 0)} neutral · "
-                    f"{counts.get('negative', 0)} negative"
+                    " · ".join(sentiment_parts)
                 )
+
             else:
                 st.caption("No recent relevant articles found.")
 
@@ -454,7 +465,7 @@ try:
                 contributions,
                 articles,
             )
-            
+
         st.subheader("AI Market Summary")
 
         with st.container(border=True):
@@ -462,7 +473,7 @@ try:
 
             st.caption(
                 "Generated from the quantitative model signals and "
-                "FinBERT-classified news shown below."
+                "analyzed financial news shown below."
             )
 
     except Exception:
@@ -551,11 +562,12 @@ try:
 
     st.markdown(
         '<div class="section-subtitle">'
-        "Recent ticker-related financial headlines classified by FinBERT."
+        "Recent ticker-related financial headlines analyzed using "
+        "FinBERT with contextual AI review when needed."
         "</div>",
         unsafe_allow_html=True,
     )
-
+    
     if not articles:
         st.info(
             "No recent relevant news found for this ticker."
@@ -563,7 +575,6 @@ try:
 
     for article in articles:
         sentiment = article["sentiment"]
-        confidence = article["confidence"] * 100
 
         with st.container(border=True):
             st.markdown(
@@ -590,15 +601,53 @@ try:
             if published_at:
                 try:
                     published_date = published_at[:10]
-                    metadata += f" · {published_date}"
-                except (TypeError, IndexError):
+                    metadata += (
+                        f" · {published_date}"
+                    )
+                except (
+                    TypeError,
+                    IndexError,
+                ):
                     pass
+
+            sentiment_source = article.get(
+                "sentiment_source",
+                "finbert",
+            )
+
+            finbert_confidence = (
+                article.get(
+                    "finbert_confidence",
+                    article.get(
+                        "confidence",
+                        0,
+                    ),
+                )
+                * 100
+            )
+
+            if sentiment_source == "gemini":
+                finbert_label = article.get(
+                    "finbert_sentiment",
+                    "unknown",
+                ).title()
+
+                sentiment_metadata = (
+                    "Contextually reviewed by Gemini"
+                    f" · FinBERT: {finbert_label} "
+                    f"({finbert_confidence:.0f}%)"
+                )
+            else:
+                sentiment_metadata = (
+                    f"{finbert_confidence:.0f}% "
+                    "FinBERT confidence"
+                )
 
             st.caption(
                 f"{metadata} · "
-                f"{confidence:.0f}% sentiment confidence"
+                f"{sentiment_metadata}"
             )
-
+            
 except Exception as error:
     st.error(
         f"Unable to analyze {ticker}: {error}"
