@@ -5,6 +5,7 @@ import re
 
 import requests
 import yfinance as yf
+from datetime import datetime, timedelta, timezone
 from dotenv import load_dotenv
 
 
@@ -90,6 +91,10 @@ def get_marketaux_news(ticker: str, limit: int = 3) -> list[dict]:
     if not api_key:
         raise ValueError("MARKETAUX_API_KEY is not set.")
 
+    published_after = (
+        datetime.now(timezone.utc) - timedelta(days=30)
+    ).strftime("%Y-%m-%d")
+
     response = requests.get(
         "https://api.marketaux.com/v1/news/all",
         params={
@@ -99,6 +104,7 @@ def get_marketaux_news(ticker: str, limit: int = 3) -> list[dict]:
             "must_have_entities": "true",
             "group_similar": "true",
             "language": "en",
+            "published_after": published_after,
             "sort": "entity_match_score",
             "sort_order": "desc",
             "limit": min(limit, 3),

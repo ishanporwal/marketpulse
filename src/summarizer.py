@@ -27,6 +27,7 @@ FEATURE_LABELS = {
 def generate_market_summary(
     ticker: str,
     risk_score: float,
+    latest_features: dict,
     contributions: list[dict],
     articles: list[dict],
 ) -> str:
@@ -38,7 +39,10 @@ def generate_market_summary(
 
     client = genai.Client(api_key=api_key)
 
-    top_signals = contributions[:5]
+    daily_move = latest_features["return_1d"] * 100
+    recent_volatility = latest_features["volatility_20d"] * 100
+
+    top_signals = contributions[:5]    
 
     signal_text = "\n".join(
         (
@@ -64,51 +68,42 @@ def generate_market_summary(
     You are writing a short market overview for someone viewing {ticker}
     on a financial dashboard.
 
-    The quantitative model produced an abnormal-move risk score of
+    The quantitative model produced a 5-day abnormal-move risk score of
     {risk_score * 100:.1f}/100.
+
+    IMPORTANT: This score estimates the likelihood of an unusually large
+    future move RELATIVE TO THE STOCK'S OWN RECENT VOLATILITY. It is not
+    a measure of whether the stock itself is currently volatile or safe.
+
+    Current market context:
+    - Latest 1-day price movement: {daily_move:+.1f}%
+    - Recent 20-day daily volatility: {recent_volatility:.1f}%
 
     The most influential quantitative signals are:
     {signal_text}
 
-    Recent financial news headlines classified by FinBERT:
+    Recent financial news classified by FinBERT:
     {news_text}
 
-    Write a concise 3-4 sentence summary for a general investor.
+    Write a concise 3-4 sentence summary.
 
-    Follow these rules carefully:
-
-    - Treat the abnormal-move risk score as a model score, not a probability,
-    forecast, or prediction of whether the stock will rise or fall.
-    - Do not imply that a higher abnormal-move risk score means the stock
-    is likely to decline. The score represents risk of an unusually large move
-    in either direction.
-    - Clearly separate quantitative model signals from news sentiment.
-    - Describe model signals as factors that increase or decrease the model's
-    score. Do not claim that they caused market behavior.
-    - Translate quantitative features into simple investor-friendly language.
-    - Do not mention raw feature names, raw contribution values, z-scores,
-    indicator values, or machine-learning terminology.
-    - Focus on the strongest signals rather than listing every feature.
-    - If closely related signals point in opposite directions, describe them as
-    mixed rather than presenting only one side.
-    - Do not describe a signal as positive or negative for the stock price.
-    Only describe whether it raises or lowers abnormal-move risk.
-    - Base all news discussion only on the supplied headlines and FinBERT labels.
-    - Do not infer causes, consequences, partnerships, strategy, market reaction,
-    or relationships that are not explicitly stated in the supplied headline.
-    - Do not add outside knowledge about the company or market.
-    - If only one article is provided, refer to it as a single headline or article;
-    do not generalize it into the overall state of financial news.
-    - If multiple articles are provided and their sentiment labels disagree,
-    describe the news sentiment as mixed.
-    - Do not overstate FinBERT sentiment. Describe it as the sentiment assigned
-    to the supplied news, not as evidence about future stock performance.
-    - Avoid overly technical or promotional financial language such as
-    "bullish", "bearish", "upward pull", "risk outlook", or "market catalyst".
-    - Use direct, neutral language.
-    - Do not provide buy, sell, hold, price-target, or investment recommendations.
-    - Do not invent any facts.
-    """
+    Rules:
+    - Write for a normal investor, not a machine learning engineer.
+    - Clearly distinguish current volatility from the abnormal-move risk score.
+    - Never describe the stock itself as low risk, safe, or stable simply
+    because the abnormal-move risk score is low.
+    - If the stock currently has large price swings or high volatility,
+    explicitly clarify that a low model score only means lower risk of an
+    additional move that is unusually large relative to recent behavior.
+    - Do not mention raw feature names such as "volume_zscore_20d".
+    - Do not include raw model contribution values.
+    - Explain quantitative signals in plain English.
+    - Summarize only the news provided.
+    - Do not infer relationships or causes beyond what the headlines state.
+    - Treat the risk score as a model score, not a literal probability.
+    - Do not invent facts, causes, events, or relationships.
+    - Do not provide buy, sell, or hold recommendations.
+    """    
     
     response = client.models.generate_content(
         model=MODEL_NAME,
